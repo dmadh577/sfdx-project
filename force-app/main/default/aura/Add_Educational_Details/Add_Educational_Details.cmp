@@ -1,0 +1,40 @@
+<aura:component implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,forceCommunity:availableForAllPageTypes,force:lightningQuickAction" access="global" >
+    <aura:attribute name="InstituteName" type="String" default=""/>
+    
+	<aura:attribute name="CourseName" type="String" default=""/>
+    
+	<aura:attribute name="DurationOfCourse" type="String" default=""/>
+	
+    <aura:attribute name="OverallScore" type="String" default=""/>
+    
+    <aura:attribute name="PageSubHeading" type="String" default="Your Educational Detail ->"/>
+    
+    <aura:attribute name="EducationDetailsListInnerComponent" type="List" />
+    
+    <aura:attribute name="indexNo" type="Integer" />
+    
+    <aura:attribute name="sequenceNo" type="Integer"/>
+    
+    <aura:handler name="init" value="{!this}" action="{!c.doinit}"/>
+    <aura:handler name="change" value="{!v.indexNo}" action="{!c.dochange}"/>
+                  
+    <div class="slds-m-top--xx-large">
+		<div class="slds-page-header">
+			<div class="slds-align--absolute-center">
+        		<div class="slds-text-heading--small">
+ 					{!v.PageSubHeading} {!v.indexNo}       
+                </div>
+        	</div>    
+        </div>
+    </div>
+
+    <br/><br/>
+    <lightning:input label="Enter Your Institite Name" name="InstituteName" Value="{!v.InstituteName}"/><br/>
+	
+	<lightning:input label="Enter Your Course Name" name="CourseName" Value="{!v.CourseName}"/><br/>
+    
+	<lightning:input label="Enter Duration Of Course (In Years)" name="DurationOfCourse" Value="{!v.DurationOfCourse}"/><br/>
+	
+    <lightning:input label="Enter Overallscore" name="OverallScore" Value="{!v.OverallScore}"/><br/>
+    <lightning:button iconName="utility:delete" variant="border-filled" label="Delete the education details" onclick="{!c.deleteDetails}"/>
+</aura:component>

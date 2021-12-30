@@ -1,0 +1,7 @@
+<apex:page controller="PageMsg">
+<apex:form >
+<apex:pageMessages id="pbm"/>
+<apex:inputText value="{!str}"/>
+<apex:commandButton action="{!addPgMsg}" value="Add string Message"/>
+</apex:form>
+</apex:page>

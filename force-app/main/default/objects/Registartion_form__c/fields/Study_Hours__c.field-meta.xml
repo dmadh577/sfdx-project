@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Study_Hours__c</fullName>
+    <externalId>false</externalId>
+    <label>Study Hours</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Less than 1Hour</fullName>
+                <default>false</default>
+                <label>Less than 1Hour</label>
+            </value>
+            <value>
+                <fullName>In Between 1 to 4 hours</fullName>
+                <default>false</default>
+                <label>In Between 1 to 4 hours</label>
+            </value>
+            <value>
+                <fullName>In Between 4 to 8 hours</fullName>
+                <default>false</default>
+                <label>In Between 4 to 8 hours</label>
+            </value>
+            <value>
+                <fullName>More than 8 hours</fullName>
+                <default>false</default>
+                <label>More than 8 hours</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

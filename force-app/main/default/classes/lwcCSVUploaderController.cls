@@ -66,8 +66,7 @@ public with sharing class lwcCSVUploaderController {
     public static final string Brokerage_Only =    'Brokerage Only';
     
     @AuraEnabled
-    public static string uploadQueueable(Id contentDocumentId, string tpId,string modeId, string rateMethod, 
-                                         string rfpId, string status, string quoteId, date effDate, date expDate){
+    public static string uploadQueueable(Id contentDocumentId, string tpId,string modeId, string rateMethod, string rfpId, string status, string quoteId, date effDate, date expDate){
                                              try{
                                                  TriggerHandlerRateEntry.shouldRunTrigger = false;
                                                  

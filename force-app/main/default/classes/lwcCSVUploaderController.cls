@@ -66,632 +66,675 @@ public with sharing class lwcCSVUploaderController {
     public static final string Brokerage_Only =    'Brokerage Only';
     
     @AuraEnabled
-    public static string uploadQueueable(Id contentDocumentId, string tpId,string modeId, string rateMethod, string rfpId, string status, string quoteId, date effDate, date expDate){
-        try{
-            TriggerHandlerRateEntry.shouldRunTrigger = false;
-            
-            ContentVersion contentVersionObj = [ SELECT Id, VersionData FROM 
-                                                ContentVersion WHERE 
-                                                ContentDocumentId =:contentDocumentId ];
-            list<rtms__Lane__c> laneList = new list<rtms__Lane__c>();
-            rateentryRatetypePicval=getPickList(rateEntry,rateType);
-            rateentryPricetypesubmitted=getPickList(rateEntry,priceType);
-            calcuPriceTypePickval=getPickList(reCalc,rcCalctype);
-            
-            List<rtms__RateEntry__c> existingrateEntries =  [SELECT Id, rtms__Lane__r.Name,Lane_Name__c,Commodity__r.Name,rtms__Category__c,
-                                                            rtms__Mode2__r.Name,rtms__Effective_Date__c,rtms__Expiration_Date__c,
-                                                            rtms__Minimum_Weight__c,rtms__Rate_Type__c,Price_Type_Submitted__c,
-                                                            Terminal1__r.Name, rtms__Status__c, rtms__Accessorial__r.Name
-                                                            FROM rtms__RateEntry__c WHERE rtms__Transportation_Profile__c  =: tpId];
-            Set<String> existingLaneNames = new Set<String>();
-            Map<String, rtms__RateEntry__c> duplicateMaps = new Map<String, rtms__RateEntry__c>();
-            for(rtms__RateEntry__c rateEntry : existingrateEntries){
-                existingLaneNames.add(rateEntry.Lane_Name__c);
-                duplicateMaps.put(rateEntry.Lane_Name__c,rateEntry);
-            }
-            
-            Map<String, rtms__RateEntry__c> newRateEntryMap = new Map<String, rtms__RateEntry__c>();
-            Map<String, rtms__RateEntry__c> newRateEntryAccessMap = new Map<String, rtms__RateEntry__c>();
-            //List<rtms__RateEntry__c> newRateEntryList = new List<rtms__RateEntry__c>();
-            
-            Map<String, rtms__RateEntryAccessorial__c> rateEntryAccessorialMap = new Map<String, rtms__RateEntryAccessorial__c>();
-            map<String, String> failedaccessorialMap = new Map<String, String>();
-            map<String, String> failedRateEntryMap = new Map<String, String>();
-            Integer successCount = 0;
-            List<rtms__Lane__c> insertLaneList = new List<rtms__Lane__c>();
-            String data= contentVersionObj.VersionData.toString();
-            //String lanenameexists;
-            List<String> failedRows = new List<String>();
-            String[] csvFileLines=data.split('\n');
-            //to get all valid picklist values.
-            //validRateMethodsList = getValidRateMethodsList();
-            validRateMethodsList = getPickListlabels(reCalc, rate_Method);
-            //validStateValuesList = getValidStateValuesList();
-            validStateValuesList =getPickListlabels(Lane, Origin_State_Province);
-            //validCountryValuesList = getValidCountryValuesList();
-            validCountryValuesList = getPickListlabels(Lane, Origin_Country);
-            validZoneNamesMap = getValidZoneNames();
-            accList=getallAccounts();
-            validLocationNamesMap = getvalidLocationNames(accList);
-            dupLaneMap=getduplicateLocationNames(accList);
-            validAccessorialNamesMap = getvalidAccessorialNames();
-            validFSCNamesMap = getvalidFSCNames();
-            validModeNamesMap = getvalidModeNames();
-            validCommodityNamesMap = getvalidCommodityNames();
-            validTerminalNamesMap = getvalidTerminalNames();
-            
-            
-            //start reading the CSV file record by record and validating the data.
-            for(Integer i=1;i<csvFileLines.size();i++){
-                validateFields(i, lanenameexcel, csvFileLines, failedaccessorialMap,laneNameList,newLaneMap, effDate, expDate,rfpId, tpId, status, quoteId, newRateEntryAccessMap, duplicateMaps, existingLaneNames, newRateEntryMap, rateEntryAccessorialMap, csvimportMap, csvimportMap1);
-            }
-            
-            //system.debug('failedaccessorialMap--'+JSON.serializePretty(failedaccessorialMap));
-            //system.debug('rateEntryAccessorialMap--'+JSON.serializePretty(rateEntryAccessorialMap));
-            //system.debug('newRateEntryMap--'+JSON.serializePretty(newRateEntryMap));
-            //system.debug('csvimportMap1--'+JSON.serializePretty(csvimportMap1));
-            //system.debug('csvimportMap--'+JSON.serializePretty(csvimportMap));
-            //system.debug('csvimportMap--'+JSON.serializePretty(newLaneMap));
-            //system.debug('failedrows--'+JSON.serializePretty(failedRows));
-            for(String failedKey : failedaccessorialMap.keySet()){
-                for(String mapKey : rateEntryAccessorialMap.keySet()){
-                    rtms__RateEntryAccessorial__c accrecord = rateEntryAccessorialMap.get(mapKey);
-                    String failedlanenameexcel = accrecord.Lane_name__c;
-                    
-                    if(mapKey.contains(failedKey)){
-                        
-                        rateEntryAccessorialMap.remove(mapKey);
-                        for(String importkey :csvimportMap1.keySet()){
-                            
-                            if(importkey.contains(failedKey)){
-                                String failedrecord = csvimportMap1.get(importkey);
-                                string failedlanenameexcel1=failedRowsMapIndex1.get(importkey);
-                                integer validIndex=csvDatamap1.get(failedlanenameexcel1);
-                                
-                                Integer Count = 0;
-                                for (String str : csvFileLines) {
-                                    if (str == failedrecord) {
-                                        count++;
-                                    }
-                                }
-                                
-                                Integer Countnew = 0;
-                                String cleanedCsvRows = csvRows.replaceAll('[^a-zA-Z0-9]', '');
-                                String cleanedrow = failedrecord.replaceAll('[^a-zA-Z0-9]', '');
-                                Countnew = cleanedCsvRows.split(cleanedrow, -1).size() - 1;
-                                
-                                if(Countnew<Count){
-                                    if(csvRows==null){
-                                        csvRows =failedrecord; 
-                                    }
-                                    if(csvRows!=null && !csvRows.toString().contains(failedrecord)){
-                                        csvRows +=failedrecord;
-                                    }
-                                
-                                    errorMsg = lwcCSVcustomsetting.NoRateEntryPresent__c+ ' "' + failedlanenameexcel1 + '"';
-                                    errorMsgList.add(errorMsg);
-                                    for(integer index:csvDatamap.keyset()){
-                                        
-                                        if(failedrecord==csvDatamap.get(index) && index==validIndex){
-                                            if(failedRowsMap!=null){
-                                                if( failedRowsMap.get(index)!=null){
-                                                    if(!failedRowsMap.get(index).Contains(errorMsg)){
-                                                    failedRowsMap.get(index).add(errorMsg);   
-                                                    } 
-                                                }
-                                                else{
-                                                    
-                                                    failedRowsMap.put(index,new List<string>{errorMsg});   
-                                                }
-                                                
-                                            }
-                                            else{
-                                                failedRowsMap.put(1,new List<string>{errorMsg});
-                                            }
-                                            
-                                            break;                                                                      
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        failedCount++;
-                    }
-                }
-                
-                for(String rateKey : newRateEntryMap.keySet()){
-                    if(failedKey.Contains(rateKey)){
-                        rtms__RateEntry__c parentRateEntry = newRateEntryMap.get(rateKey);
-                        
-                        String failedlanenameexcel = parentRateEntry.Lane_name__c;
-                        
-                        if(parentRateEntry.rtms__Rate_Type__c == rateentryRatetypePicval.get(FreightAccessorial) || parentRateEntry.rtms__Rate_Type__c == FreightFuelAccessorial){
-                            failedRateEntryMap.put(rateKey,failedlanenameexcel);
-                        }
-                        for(String importkey :csvimportMap1.keySet()){
-                            
-                            newRateEntryMap.remove(rateKey);
-                            if(importkey.contains(rateKey)){
-                                failedlanenameexcel=failedRowsMapIndex1.get(importkey);
-                                integer validIndex=csvDatamap1.get(failedlanenameexcel);
-                            
-                                String failedrecord = csvimportMap1.get(importkey);
-                                
-                                Integer Count = 0;
-                                for (String str : csvFileLines) {
-                                    //system.debug('failedrecordfailedrecordstr'+str);
-                                    if (str == failedrecord) {
-                                        system.debug('123---');
-                                        count++;
-                                    }
-                                }
-                                Integer Countnew = 0;
-                                String cleanedCsvRows = csvRows.replaceAll('[^a-zA-Z0-9]', '');
-                                String cleanedrow = failedrecord.replaceAll('[^a-zA-Z0-9]', '');
-                                Countnew = cleanedCsvRows.split(cleanedrow, -1).size() - 1;
-                                if(Countnew<Count || Countnew == 0){
-                                
-                                    if(csvRows!=null && !csvRows.toString().contains(failedrecord)){
-                                        csvRows +=failedrecord;
-                                        
-                                    }
-                                    if(csvRows==null){
-                                        csvRows =failedrecord;
-                                    }
-                                    
-                                    errorMsg = lwcCSVcustomsetting.NoAccessorialspresent__c + ' "' + failedlanenameexcel + '"';
-                                    errorMsgList.add(errorMsg);
-                                    for(integer index:csvDatamap.keyset()){
-                                        
-                                        if(failedrecord==csvDatamap.get(index) && index== validIndex){
-                                            if(failedRowsMap!=null){
-                                                if(failedRowsMap.get(index)!=null){
-                                                    failedRowsMap.get(index).add(errorMsg);  
-                                                }
-                                                else{
-                                                    failedRowsMap.put(index,new List<string>{errorMsg});
-                                                }
-                                            }
-                                            else{
-                                                failedRowsMap.put(1,new List<string>{errorMsg});
-                                                }
-                                            break;
-                                        }  
-                                    }
-                                }
-                            }
-                        }
-                        failedCount++; 
-                    }
-                }
-            }
-
-            //to check rate entry and accessorial rate methods if include in freight is true.
-            for(String rateKey : newRateEntryMap.keySet()){
-                rtms__RateEntry__c parentRateEntry = newRateEntryMap.get(rateKey);
-                String parentRateMethod = parentRateEntry.Rate_Method__c;
-                //newRateEntryMap.remove(rateKey);
-                if(parentRateEntry.rtms__Rate_Type__c == rateentryRatetypePicval.get(FreightAccessorial) || parentRateEntry.rtms__Rate_Type__c == FreightFuelAccessorial){
-                    Boolean failedRec = false;
-                    for(String mapKey : rateEntryAccessorialMap.keySet()){
-                        if(mapKey.contains(rateKey)){
-                            rtms__RateEntryAccessorial__c accrecord = rateEntryAccessorialMap.get(mapKey);
-                            if(accrecord.Include_In_Freight__c && parentRateMethod !=accrecord.Rate_Method__c && !failedRec){
-                                failedRec = true;
-                                newRateEntryMap.remove(rateKey);
-                                failedCount++;
-                                String failedrecord = csvimportMap1.get(rateKey);
-                                
-                                if(csvRows!=null && failedrecord!=null && !csvRows.toString().contains(failedrecord) ){
-                                    csvRows +=failedrecord;
-                                    //system.debug('csvRows ==> after adding'+ JSON.serializePretty(csvRows));
-                                }
-                                if(csvRows==null && failedrecord!=null){
-                                    csvRows =failedrecord;
-                                }
-                                
-                                failedRateEntryMap.put(rateKey,parentRateMethod);
-                                errorMsg = lwcCSVcustomsetting.RateEntryandAccessorial__c+' ' +rateKey;
-                                errorMsgList.add(errorMsg);
-                                for(integer index:csvDatamap.keyset()){
-                                    
-                                    if(failedrecord==csvDatamap.get(index)){
-                                        
-                                        if(failedRowsMap!=null){
-                                            if( failedRowsMap.get(index)!=null)
-                                            {
-                                                failedRowsMap.get(index).add(errorMsg);
-                                                
-                                            }
-                                            else{
-                                                failedRowsMap.put(index,new List<string>{errorMsg});   
-                                            }
-                                        }
-                                        else{
-                                            failedRowsMap.put(1,new List<string>{errorMsg});
-                                        }
-                                        
-                                        break;
-                                    }
-                                }
-                            }     
-                        }
-                    }  
-                }
-            }
-            
-            //end of checking rate methods.
-            
-            //system.debug('failedRateEntryMap--'+JSON.serializePretty(failedRateEntryMap));
-            //system.debug('rateEntryAccessorialMap-1-'+JSON.serializePretty(rateEntryAccessorialMap));
-            for(String failedKey : failedRateEntryMap.keySet()){
-                for(String mapKey : rateEntryAccessorialMap.keySet()){
-                    rtms__RateEntryAccessorial__c accrecord = rateEntryAccessorialMap.get(mapKey);
-                    String failedlanenameexcel = accrecord.Lane_name__c;
-                    if(mapKey.contains(failedKey)){
-                        rateEntryAccessorialMap.remove(mapKey);
-                        for(String importkey :csvimportMap1.keySet()){
-                            if(importkey.contains(failedKey)){
-                                String failedrecord = csvimportMap1.get(importkey);
-                                
-                                Integer Count = 0;
-                                for (String str : csvFileLines) {
-                                    if (str == failedrecord) {
-                                        count++;
-                                    }
-                                }
-                                
-                                Integer Countnew = 0;
-                                String cleanedCsvRows = csvRows.replaceAll('[^a-zA-Z0-9]', '');
-                                String cleanedrow = failedrecord.replaceAll('[^a-zA-Z0-9]', '');
-                                Countnew = cleanedCsvRows.split(cleanedrow, -1).size() - 1;
-                                
-                                if(Countnew<Count){
-                                    if(csvRows !=null && !csvRows.toString().contains(failedrecord)){
-                                        csvRows +=failedrecord;  
-                                    }
-                                    if(csvRows == null){
-                                        csvRows =failedrecord;
-                                    }
-                                    errorMsg = lwcCSVcustomsetting.NoAccessorialspresent__c+ ' ' + failedKey;
-                                    errorMsgList.add(errorMsg);
-                                    for(integer index:csvDatamap.keyset()){
-                                        //system.debug('failedrecord4==>'+failedrecord);
-                                        //system.debug('failedrecord Map==>'+csvDatamap.get(index));
-                                        if(failedrecord==csvDatamap.get(index)){
-                                            if(failedRowsMap!=null){
-                                                if(/*indexValue!=null && */failedRowsMap.get(index)!=null){
-                                                    failedRowsMap.get(index).add(errorMsg);  
-                                                }
-                                                else{
-                                                    failedRowsMap.put(index,new List<string>{errorMsg});   
-                                                }
-                                                system.debug(errorMsg+' coming from ==>'+JSON.serializePretty(failedRowsMap.get(index)));
-                                            }
-                                            else{failedRowsMap.put(1,new List<string>{errorMsg});
-                                                system.debug(errorMsg+' coming from ==>'+JSON.serializePretty(failedRowsMap.get(1)));
-                                            }
-                                            break;
-                                        }
-                                    }      
-                                }
-                            }
-                        }   
-                        failedCount++;   
-                    }
-                }
-            }
-            
-            //system.debug('rateEntryAccessorialMap---2-'+JSON.serializePretty(rateEntryAccessorialMap));
-            //system.debug('rateEntryAccessorialMapSize---2-'+rateEntryAccessorialMap.size() );
-            //system.debug('newRateEntryMap-2-'+JSON.serializePretty(newRateEntryMap));
-            //Added below code for no child check---start
-            Set<String> myKeySet = new Set<String>();
-            for(String key : rateEntryAccessorialMap.keySet()){
-                Boolean rateentryexist = false;
-                for(String rateKey : newRateEntryMap.keySet()){
-                    if(key.contains(rateKey) && !rateentryexist){
-                        rateentryexist = true;
-                    }
-                }if(!rateentryexist){
-                    rateEntryAccessorialMap.remove(key);
-                    
-                    if(csvRows !=null && !csvRows.toString().contains(csvimportMap.get(key))){
-                        csvRows += csvimportMap.get(key);
-                    
-                    }
-                    if(csvRows==null){
-                        csvRows = csvimportMap.get(key);
-                    }
-                    errorMsg = lwcCSVcustomsetting.NoRateEntryPresent__c+ ' "' + key + '"';
-                    errorMsgList.add(errorMsg);
-                    for(integer index:csvDatamap.keyset()){
-                        
-                        if(csvimportMap.get(key)==csvDatamap.get(index)){
-                            if(failedRowsMap!=null){
-                                if(failedRowsMap.get(index)!=null)
-                                {
-                                    if(!failedRowsMap.get(index).Contains(errorMsg)){
-                                        failedRowsMap.get(index).add(errorMsg);  
-                                    }   
-                                }
-                                else{
-                                    failedRowsMap.put(index,new List<string>{errorMsg});   
-                                }
-                            } else{
-                                failedRowsMap.put(1,new List<string>{errorMsg});
-                            }
-                            
-                            break;
-                        }
-                    }
-                    
-                    failedCount++; 
-                } else {
-                    myKeySet.add(key);
-                }
-            }
-            
-            Boolean isPartialMatchFound = false;
-            for(String rateKey : newRateEntryMap.keySet()){
-                rtms__RateEntry__c freightentry = newRateEntryMap.get(rateKey);
-                if(freightentry.rtms__Rate_Type__c==FreightFuelAccessorial || freightentry.rtms__Rate_Type__c==rateentryRatetypePicval.get(FreightAccessorial)){
-                    isPartialMatchFound = false;
-                    for(String s : myKeySet) {
-                        if(s.contains(rateKey)) {
-                            isPartialMatchFound = true;
-                            break; // Stop the loop once a match is found
-                        }
-                    }
-                    
-                    if(!isPartialMatchFound){
-                        newRateEntryMap.remove(rateKey);
-                        
-                        if(csvRows !=null && !csvRows.toString().contains(csvimportMap.get(rateKey))){
-                            csvRows += csvimportMap.get(rateKey);
-                        
-                        }
-                        if(csvRows==null){
-                            csvRows += csvimportMap.get(rateKey);
-                        }
-                        
-                        failedCount++;
-                        errorMsg = lwcCSVcustomsetting.NoAccessorialspresent__c + ' "' + rateKey + '"';
-                        errorMsgList.add(errorMsg);
-                        for(integer index:csvDatamap.keyset()){
-                        
-                            if(csvimportMap.get(rateKey)==csvDatamap.get(index)){
-                                if(failedRowsMap!=null){
-                                    if( failedRowsMap.get(index)!=null)
-                                    {
-                                        failedRowsMap.get(index).add(errorMsg);  
-                                    }
-                                    else{
-                                        failedRowsMap.put(index,new List<string>{errorMsg});   
-                                    }
-                                }
-                                else{
-                                    failedRowsMap.put(1,new List<string>{errorMsg});
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            //Added below code for no child check---End
-            List<rtms__Lane__c> queriedlaneList = [select Id,Name from rtms__Lane__c where Name IN : laneNameList];
-            //system.debug('laneNameList==='+JSON.serializePretty(laneNameList));
-            //system.debug('queriedlaneList==='+JSON.serializePretty(queriedlaneList));
-            for(String lane : laneNameList){
-                Boolean check = false;
-                if(queriedlaneList.size()>0){
-                    for(rtms__Lane__c lanerec : queriedlaneList){
-                        if(lanerec.Name == lane && !check){
-                            check = true;
-                            rtms__Lane__c updateLane = newLaneMap.get(lane);
-                            updateLane.Id = lanerec.Id;
-                            newLaneMap.put(lane, updateLane);
-                            //system.debug('failedlanemap==='+JSON.serializePretty(newLaneMap));
-                            for(String KeyRate : newRateEntryMap.keySet()){
-                                if(KeyRate.contains(lane)){
-                                    rtms__RateEntry__c updateRateEntry = newRateEntryMap.get(KeyRate);
-                                    updateRateEntry.rtms__Lane__c = lanerec.Id;
-                                    newRateEntryMap.put(KeyRate, updateRateEntry);
-                                }   
-                            }
-                            for(String Key : newRateEntryAccessMap.keySet()){
-                                if (key.contains(lanerec.name)){
-                                    rtms__RateEntry__c updateAccRateEntry = newRateEntryAccessMap.get(key);
-                                    updateAccRateEntry.rtms__Lane__c=lanerec.Id;
-                                    newRateEntryAccessMap.put(lane, updateAccRateEntry);
-                                }
-                            }
-                        }
-                    }
-                }
-                if(!check){
-                    rtms__Lane__c insertLane = newLaneMap.get(lane);
-                    insertLaneList.add(insertLane);
-                }
-            }
-            
-            //to insert the new lanes and attach the lane to the rate entry and accessorial if it has.
-            if(insertLaneList.size()>0){
-                
-                SObjectAccessDecision securityDecision = Security.stripInaccessible(
-                    AccessType.CREATABLE, insertLaneList);
-                List<rtms__Lane__c> insertLaneListnew =  securityDecision.getRecords();
-                
-                insert insertLaneListnew;
-                Set <Id> InsertLaneIds = new Set<Id>();
-                for(rtms__Lane__c insertlane : insertLaneListnew){
-                    InsertLaneIds.add(insertlane.Id);
-                }
-                //system.debug('insertlane'+InsertLaneIds +insertLaneList.size());
-                insertLaneList = [select Id, Name from rtms__Lane__c where Id IN : InsertLaneIds];
-                //system.debug('insertLaneList--'+JSON.serializePretty(insertLaneList));
-                //system.debug('newLaneMap--'+JSON.serializePretty(newLaneMap));
-                //system.debug('newRateEntryMap--'+JSON.serializePretty(newRateEntryMap));
-                //system.debug('newRateEntryAccessMap--'+JSON.serializePretty(newRateEntryAccessMap));
-                for(rtms__Lane__c insertlane : insertLaneList){
-                    string lanewithoutcommas = insertlane.Name.replaceAll(',', '');
-                    rtms__Lane__c updateLane = newLaneMap.get(lanewithoutcommas);
-                    ///system.debug('newLaneMap--'+JSON.serializePretty(insertlane.Name));
-                    //system.debug('newLaneMap--'+JSON.serializePretty(updateLane));
-                    //updateLane.Id = insertlane.Id;
-                    //newLaneMap.put(lanewithoutcommas, updateLane);
-                    newLaneMap.put(lanewithoutcommas, insertlane);
-                    for(String rateKey : newRateEntryMap.keySet()){
-                        if(rateKey.Contains(lanewithoutcommas)){
-                            rtms__RateEntry__c updateRateEntry = newRateEntryMap.get(rateKey);
-                            updateRateEntry.rtms__Lane__c = insertlane.Id;
-                            newRateEntryMap.put(rateKey, updateRateEntry);
-                        }
-                    }
-                    for(String Key : newRateEntryAccessMap.keySet()){
-                        if (key.contains(lanewithoutcommas)){
-                            rtms__RateEntry__c updateAccRateEntry = newRateEntryAccessMap.get(key);
-                            updateAccRateEntry.rtms__Lane__c=insertlane.Id;
-                            newRateEntryAccessMap.put(key, updateAccRateEntry);
-                        }
-                    }
-                }
-            }
-            
-            List<rtms__RateEntry__c> recordList1 = new List<rtms__RateEntry__c>(newRateEntryMap.values());
-            List<rtms__RateEntry__c> recordList2 = new List<rtms__RateEntry__c>(newRateEntryAccessMap.values());
-            List<rtms__RateEntry__c> recordListfinal = new List<rtms__RateEntry__c>();
-            recordListfinal.addAll(recordList1);
-            recordListfinal.addAll(recordList2);
-            Set<rtms__RateEntry__c> uniqueSet = new Set<rtms__RateEntry__c>(recordListfinal);
-            List<rtms__RateEntry__c> recordList3 = new List<rtms__RateEntry__c>(uniqueSet);
-            List<rtms__RateEntry__c> recordList = new List<rtms__RateEntry__c>();
-            
-            Database.SaveResult[] rEList = Database.insert(recordList3, false);
-            for (Database.SaveResult re : rEList) {
-                if (re.isSuccess()) {
-                    successCount++;                                                         
-                }else{
-                    for(Database.Error objErr : re.getErrors()) {
-                        failedCount++;
-                    }
-                }
-            }
-            for(rtms__RateEntry__c singlerec:recordList3){
-                if(singlerec.id!=null){
-                    recordList.Add(singlerec);
-                }
-            }
-            Set<Id> newRateEntryIds = new Set<Id>();
-            List<rtms__RateEntryCalculation__c> recordCalcList = new List<rtms__RateEntryCalculation__c>();
-            for(rtms__RateEntry__c record : recordList){
-                newRateEntryIds.add(record.Id);
-                if(record.rtms__Rate_Type__c !=rateentryRatetypePicval.get(Fuel)){
-                    rtms__RateEntryCalculation__c calc = new rtms__RateEntryCalculation__c();
-                    calc.rtms__Rate_Method__c = record.Rate_Method__c;
-                    calc.rtms__Calculation_Type__c = calcuPriceTypePickval.get(Base);
-                    calc.rtms__Rate_Entry__c = record.Id;
-                    calc.Accessorial_Amount__c = record.Freight_Rate__c;
-                    recordCalcList.add(calc);
-                    //System.debug('MD==>'+calc);
-                    //System.debug('MD==>'+calc.rtms__Rate_Entry__c);
-                }
-            }
-            
-            List<rtms__RateEntry__c> laneRateEntryList = [select Id, rtms__Lane__r.name,Lane_Name__c,Freight_Rate__c,Net_Freight__c,Total_Freight__c,Total_Accessorial__c from rtms__RateEntry__c where Id IN :newRateEntryIds AND rtms__Rate_Type__c !=: rateentryRatetypePicval.get(Accessorial)];
-            for(rtms__RateEntry__c laneEntry : laneRateEntryList){
-                Decimal totalFreight = laneEntry.Freight_Rate__c;
-                Decimal netFreight = laneEntry.Freight_Rate__c;
-                Decimal totalAccesorial = 0;
-                String laneName = laneEntry.Lane_Name__c;
-                for(String Key : rateEntryAccessorialMap.keySet()){
-                    if (Key.toLowerCase().contains(laneName.toLowerCase())){
-                        rtms__RateEntryAccessorial__c updateAccessorial = rateEntryAccessorialMap.get(key);
-                        if(updateAccessorial.Include_In_Freight__c == true){
-                            netFreight = netFreight+updateAccessorial.rtms__Charge__c;
-                        }else{
-                            totalAccesorial = totalAccesorial+updateAccessorial.rtms__Charge__c;
-                        }
-                        totalFreight = totalFreight+updateAccessorial.rtms__Charge__c;
-                        updateAccessorial.rtms__Rate_Entry__c = laneEntry.Id;
-                        updateAccessorial.Rate_Entry__c = laneEntry.Id;
-                        rateEntryAccessorialMap.put(key,updateAccessorial);
-                    }
-                }
-                laneEntry.Total_Freight__c = totalFreight;
-                laneEntry.Net_Freight__c = netFreight;
-                laneEntry.Total_Accessorial__c = totalAccesorial;
-            }
-            
-            if(recordCalcList.size()>0){
-                insert recordCalcList;
-                List<rtms__RateEntryCalculationCell__c> recordCellList = new List<rtms__RateEntryCalculationCell__c>();
-                for(rtms__RateEntryCalculation__c calcRecord : recordCalcList){
-                    rtms__RateEntryCalculationCell__c cell = new rtms__RateEntryCalculationCell__c();
-                    cell.rtms__Value__c = calcRecord.Accessorial_Amount__c;
-                    cell.rtms__Rate_Entry_Calculation__c = calcRecord.Id;
-                    recordCellList.add(cell);
-                }
-                insert recordCellList;
-            }
-            
-            List<rtms__RateEntryAccessorial__c> recordAccessorialList = new List<rtms__RateEntryAccessorial__c>(rateEntryAccessorialMap.values());
-            //insert recordAccessorialList;
-            List<Database.SaveResult> srList = Database.insert(recordAccessorialList, false);
-            for (Integer i = 0; i < srList.size(); i++) {
-                if (!srList[i].isSuccess()) {
-                    
-                    rtms__RateEntryAccessorial__c failedRecord = recordAccessorialList[i];
-                    String failedLane = failedRecord.Lane_Name__c;
-                    failedCount++;
-                    errorMsg = lwcCSVcustomsetting.No_Rate_Entry_for_this_Accessorial__c + ' "' + recordAccessorialList[i].rtms__Accessorial__r.name + '"' ;
-                    errorMsgList.add(errorMsg);
-                
-                    for(integer index:csvDatamap.keyset()){
-                        
-                        if(csvimportMap.get(failedLane)==csvDatamap.get(index)){
-                            if(failedRowsMap!=null){
-                                if(failedRowsMap.get(index)!=null){
-                                    failedRowsMap.get(index).add(errorMsg);
-                                }
-                                else{
-                                    failedRowsMap.put(index,new List<string>{errorMsg});   
-                                }
-                                
-                            }
-                            else{
-                                failedRowsMap.put(1,new List<string>{errorMsg});
-                            }
-                            break;
-                        }   
-                    }
-                    
-                    if(csvRows!=null && !csvRows.toString().contains(csvimportMap.get(failedLane))){
-                        csvRows += csvimportMap.get(failedLane);    
-                    }
-                    if(csvRows==null){
-                        csvRows = csvimportMap.get(failedLane);
-                    }
-                }else{
-                    successCount++;
-                }
-            }
-            
-            update laneRateEntryList;
-            
-            sendEmails(csvFileLines[0], successCount);
-            
-            TriggerHandlerRateEntry.shouldRunTrigger = true;
-            return lwcCSVcustomsetting.RecordsProcessedSuccessfully__c +successCount+ lwcCSVcustomsetting.Records_failed__c +failedCount +lwcCSVcustomsetting.Rate_Entries_String__c+ ' '+newRateEntryMap.size();
-        }catch(Exception e){
-            TriggerHandlerRateEntry.shouldRunTrigger = true;
-            //system.debug('eeer'+e.getMessage()+ 'stack' +e.getStackTraceString()+ 'type name'+e.getTypeName());
-            return lwcCSVcustomsetting.Thefollowingexceptionhasoccured__c +' ' + e.getMessage();
-        }
-    }
-
+    public static string uploadQueueable(Id contentDocumentId, string tpId,string modeId, string rateMethod, 
+                                         string rfpId, string status, string quoteId, date effDate, date expDate){
+                                             try{
+                                                 TriggerHandlerRateEntry.shouldRunTrigger = false;
+                                                 
+                                                 ContentVersion contentVersionObj = [ SELECT Id, VersionData FROM 
+                                                                                     ContentVersion WHERE 
+                                                                                     ContentDocumentId =:contentDocumentId ];
+                                                 list<rtms__Lane__c> laneList = new list<rtms__Lane__c>();
+                                                 rateentryRatetypePicval=getPickList(rateEntry,rateType);
+                                                 rateentryPricetypesubmitted=getPickList(rateEntry,priceType);
+                                                 calcuPriceTypePickval=getPickList(reCalc,rcCalctype);
+                                                 
+                                                 List<rtms__RateEntry__c> existingrateEntries =  [SELECT Id, rtms__Lane__r.Name,Lane_Name__c,Commodity__r.Name,rtms__Category__c,
+                                                                                                  rtms__Mode2__r.Name,rtms__Effective_Date__c,rtms__Expiration_Date__c,
+                                                                                                  rtms__Minimum_Weight__c,rtms__Rate_Type__c,Price_Type_Submitted__c,
+                                                                                                  Terminal1__r.Name, rtms__Status__c, rtms__Accessorial__r.Name
+                                                                                                  FROM rtms__RateEntry__c WHERE rtms__Transportation_Profile__c  =: tpId];
+                                                 Set<String> existingLaneNames = new Set<String>();
+                                                 Map<String, rtms__RateEntry__c> duplicateMaps = new Map<String, rtms__RateEntry__c>();
+                                                 for(rtms__RateEntry__c rateEntry : existingrateEntries){
+                                                     existingLaneNames.add(rateEntry.Lane_Name__c);
+                                                     duplicateMaps.put(rateEntry.Lane_Name__c,rateEntry);
+                                                 }
+                                                 
+                                                 Map<String, rtms__RateEntry__c> newRateEntryMap = new Map<String, rtms__RateEntry__c>();
+                                                 Map<String, rtms__RateEntry__c> newRateEntryAccessMap = new Map<String, rtms__RateEntry__c>();
+                                                 //List<rtms__RateEntry__c> newRateEntryList = new List<rtms__RateEntry__c>();
+                                                 
+                                                 Map<String, rtms__RateEntryAccessorial__c> rateEntryAccessorialMap = new Map<String, rtms__RateEntryAccessorial__c>();
+                                                 map<String, String> failedaccessorialMap = new Map<String, String>();
+                                                 map<String, String> failedRateEntryMap = new Map<String, String>();
+                                                 Integer successCount = 0;
+                                                 List<rtms__Lane__c> insertLaneList = new List<rtms__Lane__c>();
+                                                 String data= contentVersionObj.VersionData.toString();
+                                                 //String lanenameexists;
+                                                 List<String> failedRows = new List<String>();
+                                                 String[] csvFileLines=data.split('\n');
+                                                 //to get all valid picklist values.
+                                                 //validRateMethodsList = getValidRateMethodsList();
+                                                 validRateMethodsList = getPickListlabels(reCalc, rate_Method);
+                                                 //validStateValuesList = getValidStateValuesList();
+                                                 validStateValuesList =getPickListlabels(Lane, Origin_State_Province);
+                                                 //validCountryValuesList = getValidCountryValuesList();
+                                                 validCountryValuesList = getPickListlabels(Lane, Origin_Country);
+                                                 validZoneNamesMap = getValidZoneNames();
+                                                 accList=getallAccounts();
+                                                 validLocationNamesMap = getvalidLocationNames(accList);
+                                                 dupLaneMap=getduplicateLocationNames(accList);
+                                                 validAccessorialNamesMap = getvalidAccessorialNames();
+                                                 validFSCNamesMap = getvalidFSCNames();
+                                                 validModeNamesMap = getvalidModeNames();
+                                                 validCommodityNamesMap = getvalidCommodityNames();
+                                                 validTerminalNamesMap = getvalidTerminalNames();
+                                                 
+                                                 
+                                                 //start reading the CSV file record by record and validating the data.
+                                                 for(Integer i=1;i<csvFileLines.size();i++){
+                                                     validateFields(i, lanenameexcel, csvFileLines, failedaccessorialMap,laneNameList,newLaneMap, effDate, expDate,rfpId, tpId, status, quoteId, newRateEntryAccessMap, duplicateMaps, existingLaneNames, newRateEntryMap, rateEntryAccessorialMap, csvimportMap, csvimportMap1);
+                                                 }
+                                                 
+                                                 system.debug('failedaccessorialMap--'+JSON.serializePretty(failedaccessorialMap));
+                                                 system.debug('rateEntryAccessorialMap--'+JSON.serializePretty(rateEntryAccessorialMap));
+                                                 system.debug('newRateEntryMap--'+JSON.serializePretty(newRateEntryMap));
+                                                 system.debug('csvimportMap1--'+JSON.serializePretty(csvimportMap1));
+                                                 system.debug('csvimportMap--'+JSON.serializePretty(csvimportMap));
+                                                 system.debug('csvimportMap--'+JSON.serializePretty(newLaneMap));
+                                                 system.debug('failedrows--'+JSON.serializePretty(failedRows));
+                                                 for(String failedKey : failedaccessorialMap.keySet()){
+                                                     for(String mapKey : rateEntryAccessorialMap.keySet()){
+                                                         rtms__RateEntryAccessorial__c accrecord = rateEntryAccessorialMap.get(mapKey);
+                                                         String failedlanenameexcel = accrecord.Lane_name__c;
+                                                         
+                                                         if(mapKey.contains(failedKey)){
+                                                             
+                                                             rateEntryAccessorialMap.remove(mapKey);
+                                                             for(String importkey :csvimportMap1.keySet()){
+                                                                 
+                                                                 if(importkey.contains(failedKey)){
+                                                                     String failedrecord = csvimportMap1.get(importkey);
+                                                                     string failedlanenameexcel1=failedRowsMapIndex1.get(importkey);
+                                                                     integer validIndex=csvDatamap1.get(failedlanenameexcel1);
+                                                                     
+                                                                     Integer Count = 0;
+                                                                     for (String str : csvFileLines) {
+                                                                         if (str == failedrecord) {
+                                                                             count++;
+                                                                         }
+                                                                     }
+                                                                     
+                                                                     Integer Countnew = 0;
+                                                                     String cleanedCsvRows = csvRows.replaceAll('[^a-zA-Z0-9]', '');
+                                                                     String cleanedrow = failedrecord.replaceAll('[^a-zA-Z0-9]', '');
+                                                                     Countnew = cleanedCsvRows.split(cleanedrow, -1).size() - 1;
+                                                                     
+                                                                     if(Countnew<Count){
+                                                                         //system.debug('failedrecord==>'+failedrecord);
+                                                                         
+                                                                         if(csvRows==null){
+                                                                             csvRows =failedrecord; 
+                                                                         }
+                                                                         if(csvRows!=null && !csvRows.toString().contains(failedrecord)){
+                                                                             csvRows +=failedrecord; 
+                                                                            
+                                                                         }
+                                                                         system.debug('csvRows1--'+JSON.serializePretty(csvRows));
+                                                                        
+                                                                          errorMsg = lwcCSVcustomsetting.NoRateEntryPresent__c+ ' "' + failedlanenameexcel1 + '"';
+                                                                     errorMsgList.add(errorMsg);
+                                                                     for(integer index:csvDatamap.keyset()){
+                                                                         
+                                                                         if(failedrecord==csvDatamap.get(index) && index==validIndex){
+                                                                             if(failedRowsMap!=null){
+                                                                                 if( failedRowsMap.get(index)!=null){
+                                                                                     if(!failedRowsMap.get(index).Contains(errorMsg)){
+                                                                                        failedRowsMap.get(index).add(errorMsg);   
+                                                                                     }
+                                                                                     
+                                                                                 }
+                                                                                 else{
+                                                                                     
+                                                                                     failedRowsMap.put(index,new List<string>{errorMsg});   
+                                                                                 }
+                                                                                 
+                                                                             }
+                                                                             else{failedRowsMap.put(1,new List<string>{errorMsg});
+                                                                                 }
+                                                                             system.debug('failedRowsMap1--'+JSON.serializePretty(failedRowsMap));
+																		       break;                                                                      
+                                                                         }
+                                                                     }
+                                                                     
+                                                                     }
+                                                                     
+                                                                 }
+                                                             }
+                                                             failedCount++;
+                                                             
+                                                         }
+                                                     }
+                                                     
+                                                     for(String rateKey : newRateEntryMap.keySet()){
+                                                         if(failedKey.Contains(rateKey)){
+                                                             rtms__RateEntry__c parentRateEntry = newRateEntryMap.get(rateKey);
+                                                             
+                                                             String failedlanenameexcel = parentRateEntry.Lane_name__c;
+                                                             
+                                                             if(parentRateEntry.rtms__Rate_Type__c == rateentryRatetypePicval.get(FreightAccessorial) || parentRateEntry.rtms__Rate_Type__c == FreightFuelAccessorial){
+                                                                 failedRateEntryMap.put(rateKey,failedlanenameexcel);
+                                                             }
+                                                             for(String importkey :csvimportMap1.keySet()){
+                                                                 
+                                                                  newRateEntryMap.remove(rateKey);
+                                                                 if(importkey.contains(rateKey)){
+                                                                     failedlanenameexcel=failedRowsMapIndex1.get(importkey);
+                                                                 integer validIndex=csvDatamap1.get(failedlanenameexcel);
+                                                                  
+                                                                     String failedrecord = csvimportMap1.get(importkey);
+                                                                     
+                                                                     Integer Count = 0;
+                                                                     for (String str : csvFileLines) {
+                                                                         system.debug('failedrecordfailedrecordstr'+str);
+                                                                         if (str == failedrecord) {
+                                                                             system.debug('123---');
+                                                                             count++;
+                                                                         }
+                                                                     }
+                                                                     Integer Countnew = 0;
+                                                                     String cleanedCsvRows = csvRows.replaceAll('[^a-zA-Z0-9]', '');
+                                                                     String cleanedrow = failedrecord.replaceAll('[^a-zA-Z0-9]', '');
+                                                                     Countnew = cleanedCsvRows.split(cleanedrow, -1).size() - 1;
+                                                                     if(Countnew<Count || Countnew == 0){
+                                                                        
+                                                                         if(csvRows!=null && !csvRows.toString().contains(failedrecord)){
+                                                                             csvRows +=failedrecord;
+                                                                             
+                                                                         }
+                                                                         if(csvRows==null){
+                                                                             csvRows =failedrecord;
+                                                                         }
+                                                                         system.debug('csvRows2--'+JSON.serializePretty(csvRows));
+                                                                         errorMsg = lwcCSVcustomsetting.NoAccessorialspresent__c + ' "' + failedlanenameexcel + '"';
+                                                                     errorMsgList.add(errorMsg);
+                                                                     for(integer index:csvDatamap.keyset()){
+                                                                         
+                                                                         if(failedrecord==csvDatamap.get(index) /*&& index== validIndex*/){
+                                                                             if(failedRowsMap!=null){
+                                                                                 if(failedRowsMap.get(index)!=null){
+                                                                                     failedRowsMap.get(index).add(errorMsg);  
+                                                                                 }
+                                                                                 else{
+                                                                                     failedRowsMap.put(index,new List<string>{errorMsg});
+                                                                                 }
+                                                                                 
+                                                                             }
+                                                                             else{failedRowsMap.put(1,new List<string>{errorMsg});
+                                                                                 }
+                                                                             system.debug('failedRowsMap2--'+JSON.serializePretty(failedRowsMap));
+                                                                             break;
+                                                                             
+                                                                         }
+                                                                     
+                                                                             
+                                                                     }
+                                                                     }
+                                                                     
+                                                                     
+                                                                 }
+                                                             }
+                                                             failedCount++;
+                                                             
+                                                         }
+                                                     }
+                                                 }
+                                                 //to check rate entry and accessorial rate methods if include in freight is true.
+                                                 for(String rateKey : newRateEntryMap.keySet()){
+                                                     rtms__RateEntry__c parentRateEntry = newRateEntryMap.get(rateKey);
+                                                     String parentRateMethod = parentRateEntry.Rate_Method__c;
+                                                     //newRateEntryMap.remove(rateKey);
+                                                     if(parentRateEntry.rtms__Rate_Type__c == rateentryRatetypePicval.get(FreightAccessorial) || parentRateEntry.rtms__Rate_Type__c == FreightFuelAccessorial){
+                                                         Boolean failedRec = false;
+                                                         for(String mapKey : rateEntryAccessorialMap.keySet()){
+                                                             if(mapKey.contains(rateKey)){
+                                                                 rtms__RateEntryAccessorial__c accrecord = rateEntryAccessorialMap.get(mapKey);
+                                                                 if(accrecord.Include_In_Freight__c && parentRateMethod !=accrecord.Rate_Method__c && !failedRec){
+                                                                     failedRec = true;
+                                                                     newRateEntryMap.remove(rateKey);
+                                                                     failedCount++;
+                                                                     String failedrecord = csvimportMap1.get(rateKey);
+                                                                     
+                                                                     if(csvRows!=null && failedrecord!=null && !csvRows.toString().contains(failedrecord) ){
+                                                                         csvRows +=failedrecord;
+                                                                         
+                                                                     }
+                                                                     if(csvRows==null && failedrecord!=null){
+                                                                         csvRows =failedrecord;
+                                                                     }
+                                                                     system.debug('csvRows3--'+JSON.serializePretty(csvRows));
+                                                                     failedRateEntryMap.put(rateKey,parentRateMethod);
+                                                                     errorMsg = lwcCSVcustomsetting.RateEntryandAccessorial__c+' ' +rateKey;
+                                                                     errorMsgList.add(errorMsg);
+                                                                     for(integer index:csvDatamap.keyset()){
+                                                                         
+                                                                         if(failedrecord==csvDatamap.get(index)){
+                                                                             
+                                                                             if(failedRowsMap!=null){
+                                                                                 if( failedRowsMap.get(index)!=null)
+                                                                                 {
+                                                                                     failedRowsMap.get(index).add(errorMsg);
+                                                                                     
+                                                                                 }
+                                                                                 else{
+                                                                                     failedRowsMap.put(index,new List<string>{errorMsg});   
+                                                                                 }
+                                                                                
+                                                                             }
+                                                                             else{failedRowsMap.put(1,new List<string>{errorMsg});
+                                                                                 }
+                                                                             system.debug('failedRowsMap3--'+JSON.serializePretty(failedRowsMap));
+                                                                             break;
+                                                                         }
+                                                                     }
+                                                                     }
+                                                                 
+                                                             }
+                                                         }
+                                                         
+                                                     }
+                                                 }
+                                                 
+                                                 //end of checking rate methods.
+                                                 
+                                                 system.debug('failedRateEntryMap--'+JSON.serializePretty(failedRateEntryMap));
+                                                 system.debug('rateEntryAccessorialMap-1-'+JSON.serializePretty(rateEntryAccessorialMap));
+                                                 for(String failedKey : failedRateEntryMap.keySet()){
+                                                     for(String mapKey : rateEntryAccessorialMap.keySet()){
+                                                         rtms__RateEntryAccessorial__c accrecord = rateEntryAccessorialMap.get(mapKey);
+                                                         String failedlanenameexcel = accrecord.Lane_name__c;
+                                                         if(mapKey.contains(failedKey)){
+                                                             rateEntryAccessorialMap.remove(mapKey);
+                                                             for(String importkey :csvimportMap1.keySet()){
+                                                                 if(importkey.contains(failedKey)){
+                                                                     String failedrecord = csvimportMap1.get(importkey);
+                                                                     
+                                                                     Integer Count = 0;
+                                                                     for (String str : csvFileLines) {
+                                                                         if (str == failedrecord) {
+                                                                             count++;
+                                                                         }
+                                                                     }
+                                                                     
+                                                                     Integer Countnew = 0;
+                                                                     String cleanedCsvRows = csvRows.replaceAll('[^a-zA-Z0-9]', '');
+                                                                     String cleanedrow = failedrecord.replaceAll('[^a-zA-Z0-9]', '');
+                                                                     Countnew = cleanedCsvRows.split(cleanedrow, -1).size() - 1;
+                                                                     
+                                                                     if(Countnew<Count){
+                                                                         
+                                                                         
+                                                                         if(csvRows !=null && !csvRows.toString().contains(failedrecord)){
+                                                                             csvRows +=failedrecord;
+                                                                             
+                                                                         }
+                                                                         if(csvRows == null){
+                                                                             csvRows =failedrecord;
+                                                                         }
+                                                                         system.debug('csvRows4--'+JSON.serializePretty(csvRows));
+                                                                         errorMsg = lwcCSVcustomsetting.NoAccessorialspresent__c+ ' ' + failedKey;
+                                                                     errorMsgList.add(errorMsg);
+                                                                     for(integer index:csvDatamap.keyset()){
+                                                                         
+                                                                         if(failedrecord==csvDatamap.get(index)){
+                                                                             if(failedRowsMap!=null){
+                                                                         if(/*indexValue!=null && */failedRowsMap.get(index)!=null)
+                                                                         {
+                                                                             failedRowsMap.get(index).add(errorMsg);  
+                                                                         }
+                                                                         else{
+                                                                             failedRowsMap.put(index,new List<string>{errorMsg});   
+                                                                         }
+                                                                                 
+                                                                     }
+                                                                     else{failedRowsMap.put(1,new List<string>{errorMsg});
+                                                                         }
+                                                                     
+                                                                     system.debug('failedRowsMap4--'+JSON.serializePretty(failedRowsMap));
+                                                                             break;
+                                                                         }
+                                                                     }
+                                                                               
+                                                                     }
+                                                                     
+                                                                     
+                                                                     
+                                                                     
+                                                                 }
+                                                             }   
+                                                             failedCount++;
+                                                             
+                                                         }
+                                                     }
+                                                 }
+                                                 
+                                                 system.debug('rateEntryAccessorialMap---2-'+JSON.serializePretty(rateEntryAccessorialMap));
+                                                 system.debug('rateEntryAccessorialMapSize---2-'+rateEntryAccessorialMap.size() );
+                                                 system.debug('newRateEntryMap-2-'+JSON.serializePretty(newRateEntryMap));
+                                                 //Added below code for no child check---start
+                                                 Set<String> myKeySet = new Set<String>();
+                                                 for(String key : rateEntryAccessorialMap.keySet()){
+                                                     Boolean rateentryexist = false;
+                                                     for(String rateKey : newRateEntryMap.keySet()){
+                                                         if(key.contains(rateKey) && !rateentryexist){
+                                                             rateentryexist = true;
+                                                         }
+                                                     }if(!rateentryexist){
+                                                         rateEntryAccessorialMap.remove(key);
+                                                         
+                                                         if(csvRows !=null && !csvRows.toString().contains(csvimportMap.get(key))){
+                                                             csvRows += csvimportMap.get(key);
+                                                            
+                                                         }
+                                                         if(csvRows==null){
+                                                             csvRows = csvimportMap.get(key);
+                                                         }
+                                                         system.debug('csvRows5--'+JSON.serializePretty(csvRows));
+                                                         errorMsg = lwcCSVcustomsetting.NoRateEntryPresent__c+ ' "' + key + '"';
+                                                         errorMsgList.add(errorMsg);
+                                                         for(integer index:csvDatamap.keyset()){
+                                                             
+                                                             if(csvimportMap.get(key)==csvDatamap.get(index)){
+                                                                 if(failedRowsMap!=null){
+                                                                     if(failedRowsMap.get(index)!=null)
+                                                                     {
+                                                                         if(!failedRowsMap.get(index).Contains(errorMsg)){
+                                                                             failedRowsMap.get(index).add(errorMsg);  
+                                                                         }
+                                                                         
+                                                                     }
+                                                                     else{
+                                                                         failedRowsMap.put(index,new List<string>{errorMsg});   
+                                                                     }
+                                                                     
+                                                                 }
+                                                                 else{failedRowsMap.put(1,new List<string>{errorMsg});
+                                                                     }
+                                                                 system.debug('failedRowsMap5--'+JSON.serializePretty(failedRowsMap));
+                                                                 break;
+                                                             }
+                                                         }
+                                                         
+                                                         failedCount++;
+                                                         
+                                                         
+                                                     }else{
+                                                         myKeySet.add(key);
+                                                     }
+                                                 }
+                                                 
+                                                 Boolean isPartialMatchFound = false;
+                                                 for(String rateKey : newRateEntryMap.keySet()){
+                                                     rtms__RateEntry__c freightentry = newRateEntryMap.get(rateKey);
+                                                     if(freightentry.rtms__Rate_Type__c==FreightFuelAccessorial || freightentry.rtms__Rate_Type__c==rateentryRatetypePicval.get(FreightAccessorial)){
+                                                         isPartialMatchFound = false;
+                                                         for(String s : myKeySet) {
+                                                             if(s.contains(rateKey)) {
+                                                                 isPartialMatchFound = true;
+                                                                 break; // Stop the loop once a match is found
+                                                             }
+                                                         }
+                                                         
+                                                         if(!isPartialMatchFound){
+                                                             newRateEntryMap.remove(rateKey);
+                                                             
+                                                             if(csvRows !=null && !csvRows.toString().contains(csvimportMap.get(rateKey))){
+                                                                 csvRows += csvimportMap.get(rateKey);
+                                                                
+                                                             }
+                                                             if(csvRows==null){
+                                                                 csvRows += csvimportMap.get(rateKey);
+                                                             }
+                                                             system.debug('csvRows6--'+JSON.serializePretty(csvRows));
+                                                             failedCount++;
+                                                             errorMsg = lwcCSVcustomsetting.NoAccessorialspresent__c + ' "' + rateKey + '"';
+                                                             errorMsgList.add(errorMsg);
+                                                             for(integer index:csvDatamap.keyset()){
+                                                                
+                                                                 if(csvimportMap.get(rateKey)==csvDatamap.get(index)){
+                                                                     if(failedRowsMap!=null){
+                                                                         if( failedRowsMap.get(index)!=null)
+                                                                         {
+                                                                             failedRowsMap.get(index).add(errorMsg);  
+                                                                         }
+                                                                         else{
+                                                                             failedRowsMap.put(index,new List<string>{errorMsg});   
+                                                                         }
+                                                                        
+                                                                     }
+                                                                     else{failedRowsMap.put(1,new List<string>{errorMsg});
+                                                                         }
+                                                                     system.debug('failedRowsMap6--'+JSON.serializePretty(failedRowsMap));
+                                                                     break;
+                                                                 }
+                                                                 
+                                                                 
+                                                                 
+                                                             }
+                                                             //} 
+                                                         }
+                                                     }
+                                                 }
+                                                 
+                                                 //Added below code for no child check---End
+                                                 List<rtms__Lane__c> queriedlaneList = [select Id,Name from rtms__Lane__c where Name IN : laneNameList];
+                                                 system.debug('laneNameList==='+JSON.serializePretty(laneNameList));
+                                                 system.debug('queriedlaneList==='+JSON.serializePretty(queriedlaneList));
+                                                 for(String lane : laneNameList){
+                                                     Boolean check = false;
+                                                     if(queriedlaneList.size()>0){
+                                                         for(rtms__Lane__c lanerec : queriedlaneList){
+                                                             if(lanerec.Name == lane && !check){
+                                                                 check = true;
+                                                                 rtms__Lane__c updateLane = newLaneMap.get(lane);
+                                                                 updateLane.Id = lanerec.Id;
+                                                                 newLaneMap.put(lane, updateLane);
+                                                                 system.debug('failedlanemap==='+JSON.serializePretty(newLaneMap));
+                                                                 for(String KeyRate : newRateEntryMap.keySet()){
+                                                                     if(KeyRate.contains(lane)){
+                                                                         rtms__RateEntry__c updateRateEntry = newRateEntryMap.get(KeyRate);
+                                                                         updateRateEntry.rtms__Lane__c = lanerec.Id;
+                                                                         newRateEntryMap.put(KeyRate, updateRateEntry);
+                                                                     }   
+                                                                 }
+                                                                 for(String Key : newRateEntryAccessMap.keySet()){
+                                                                     if (key.contains(lanerec.name)){
+                                                                         rtms__RateEntry__c updateAccRateEntry = newRateEntryAccessMap.get(key);
+                                                                         updateAccRateEntry.rtms__Lane__c=lanerec.Id;
+                                                                         newRateEntryAccessMap.put(lane, updateAccRateEntry);
+                                                                     }
+                                                                 }
+                                                             }
+                                                         }
+                                                     }
+                                                     if(!check){
+                                                         rtms__Lane__c insertLane = newLaneMap.get(lane);
+                                                         insertLaneList.add(insertLane);
+                                                     }
+                                                 }
+                                                 
+                                                 //to insert the new lanes and attach the lane to the rate entry and accessorial if it has.
+                                                 if(insertLaneList.size()>0){
+                                                     
+                                                     SObjectAccessDecision securityDecision = Security.stripInaccessible(
+                                                         AccessType.CREATABLE, insertLaneList);
+                                                     List<rtms__Lane__c> insertLaneListnew =  securityDecision.getRecords();
+                                                     
+                                                     insert insertLaneListnew;
+                                                     Set <Id> InsertLaneIds = new Set<Id>();
+                                                     for(rtms__Lane__c insertlane : insertLaneListnew){
+                                                         InsertLaneIds.add(insertlane.Id);
+                                                     }
+                                                     system.debug('insertlane'+InsertLaneIds +insertLaneList.size());
+                                                     insertLaneList = [select Id, Name from rtms__Lane__c where Id IN : InsertLaneIds];
+                                                     system.debug('insertLaneList--'+JSON.serializePretty(insertLaneList));
+                                                     system.debug('newLaneMap--'+JSON.serializePretty(newLaneMap));
+                                                     system.debug('newRateEntryMap--'+JSON.serializePretty(newRateEntryMap));
+                                                     system.debug('newRateEntryAccessMap--'+JSON.serializePretty(newRateEntryAccessMap));
+                                                     for(rtms__Lane__c insertlane : insertLaneList){
+                                                         string lanewithoutcommas = insertlane.Name.replaceAll(',', '');
+                                                         rtms__Lane__c updateLane = newLaneMap.get(lanewithoutcommas);
+                                                         system.debug('newLaneMap--'+JSON.serializePretty(insertlane.Name));
+                                                         system.debug('newLaneMap--'+JSON.serializePretty(updateLane));
+                                                         //updateLane.Id = insertlane.Id;
+                                                         //newLaneMap.put(lanewithoutcommas, updateLane);
+                                                         newLaneMap.put(lanewithoutcommas, insertlane);
+                                                         for(String rateKey : newRateEntryMap.keySet()){
+                                                             if(rateKey.Contains(lanewithoutcommas)){
+                                                                 rtms__RateEntry__c updateRateEntry = newRateEntryMap.get(rateKey);
+                                                                 updateRateEntry.rtms__Lane__c = insertlane.Id;
+                                                                 newRateEntryMap.put(rateKey, updateRateEntry);
+                                                             }
+                                                         }
+                                                         for(String Key : newRateEntryAccessMap.keySet()){
+                                                             if (key.contains(lanewithoutcommas)){
+                                                                 rtms__RateEntry__c updateAccRateEntry = newRateEntryAccessMap.get(key);
+                                                                 updateAccRateEntry.rtms__Lane__c=insertlane.Id;
+                                                                 newRateEntryAccessMap.put(key, updateAccRateEntry);
+                                                             }
+                                                         }
+                                                     }
+                                                 }
+                                                 
+                                                 List<rtms__RateEntry__c> recordList1 = new List<rtms__RateEntry__c>(newRateEntryMap.values());
+                                                 List<rtms__RateEntry__c> recordList2 = new List<rtms__RateEntry__c>(newRateEntryAccessMap.values());
+                                                 List<rtms__RateEntry__c> recordListfinal = new List<rtms__RateEntry__c>();
+                                                 recordListfinal.addAll(recordList1);
+                                                 recordListfinal.addAll(recordList2);
+                                                 Set<rtms__RateEntry__c> uniqueSet = new Set<rtms__RateEntry__c>(recordListfinal);
+                                                 List<rtms__RateEntry__c> recordList3 = new List<rtms__RateEntry__c>(uniqueSet);
+                                                 List<rtms__RateEntry__c> recordList = new List<rtms__RateEntry__c>();
+                                                 
+                                                 Database.SaveResult[] rEList = Database.insert(recordList3, false);
+                                                 for (Database.SaveResult re : rEList) {
+                                                     if (re.isSuccess()) {
+                                                         successCount++;                                                         
+                                                     }else{
+                                                         for(Database.Error objErr : re.getErrors()) {
+                                                             failedCount++;
+                                                         }
+                                                     }
+                                                 }
+                                                 for(rtms__RateEntry__c singlerec:recordList3){
+                                                     if(singlerec.id!=null){
+                                                         recordList.Add(singlerec);
+                                                     }
+                                                 }
+                                                 Set<Id> newRateEntryIds = new Set<Id>();
+                                                 List<rtms__RateEntryCalculation__c> recordCalcList = new List<rtms__RateEntryCalculation__c>();
+                                                 for(rtms__RateEntry__c record : recordList){
+                                                     newRateEntryIds.add(record.Id);
+                                                     if(record.rtms__Rate_Type__c !=rateentryRatetypePicval.get(Fuel)){
+                                                         rtms__RateEntryCalculation__c calc = new rtms__RateEntryCalculation__c();
+                                                         calc.rtms__Rate_Method__c = record.Rate_Method__c;
+                                                         calc.rtms__Calculation_Type__c = calcuPriceTypePickval.get(Base);
+                                                         calc.rtms__Rate_Entry__c = record.Id;
+                                                         calc.Accessorial_Amount__c = record.Freight_Rate__c;
+                                                         recordCalcList.add(calc);
+                                                        
+                                                     }
+                                                 }
+                                                 
+                                                 List<rtms__RateEntry__c> laneRateEntryList = [select Id, rtms__Lane__r.name,Lane_Name__c,Freight_Rate__c,Net_Freight__c,Total_Freight__c,Total_Accessorial__c from rtms__RateEntry__c where Id IN :newRateEntryIds AND rtms__Rate_Type__c !=: rateentryRatetypePicval.get(Accessorial)];
+                                                 for(rtms__RateEntry__c laneEntry : laneRateEntryList){
+                                                     Decimal totalFreight = laneEntry.Freight_Rate__c;
+                                                     Decimal netFreight = laneEntry.Freight_Rate__c;
+                                                     Decimal totalAccesorial = 0;
+                                                     String laneName = laneEntry.Lane_Name__c;
+                                                     for(String Key : rateEntryAccessorialMap.keySet()){
+                                                         if (Key.toLowerCase().contains(laneName.toLowerCase())){
+                                                             rtms__RateEntryAccessorial__c updateAccessorial = rateEntryAccessorialMap.get(key);
+                                                             if(updateAccessorial.Include_In_Freight__c == true){
+                                                                 netFreight = netFreight+updateAccessorial.rtms__Charge__c;
+                                                             }else{
+                                                                 totalAccesorial = totalAccesorial+updateAccessorial.rtms__Charge__c;
+                                                             }
+                                                             totalFreight = totalFreight+updateAccessorial.rtms__Charge__c;
+                                                             updateAccessorial.rtms__Rate_Entry__c = laneEntry.Id;
+                                                             updateAccessorial.Rate_Entry__c = laneEntry.Id;
+                                                             rateEntryAccessorialMap.put(key,updateAccessorial);
+                                                         }
+                                                     }
+                                                     laneEntry.Total_Freight__c = totalFreight;
+                                                     laneEntry.Net_Freight__c = netFreight;
+                                                     laneEntry.Total_Accessorial__c = totalAccesorial;
+                                                 }
+                                                 
+                                                 if(recordCalcList.size()>0){
+                                                     insert recordCalcList;
+                                                     List<rtms__RateEntryCalculationCell__c> recordCellList = new List<rtms__RateEntryCalculationCell__c>();
+                                                     for(rtms__RateEntryCalculation__c calcRecord : recordCalcList){
+                                                         rtms__RateEntryCalculationCell__c cell = new rtms__RateEntryCalculationCell__c();
+                                                         cell.rtms__Value__c = calcRecord.Accessorial_Amount__c;
+                                                         cell.rtms__Rate_Entry_Calculation__c = calcRecord.Id;
+                                                         recordCellList.add(cell);
+                                                     }
+                                                     insert recordCellList;
+                                                 }
+                                                 
+                                                 List<rtms__RateEntryAccessorial__c> recordAccessorialList = new List<rtms__RateEntryAccessorial__c>(rateEntryAccessorialMap.values());
+                                                 //insert recordAccessorialList;
+                                                 List<Database.SaveResult> srList = Database.insert(recordAccessorialList, false);
+                                                 for (Integer i = 0; i < srList.size(); i++) {
+                                                     if (!srList[i].isSuccess()) {
+                                                         
+                                                         rtms__RateEntryAccessorial__c failedRecord = recordAccessorialList[i];
+                                                         String failedLane = failedRecord.Lane_Name__c;
+                                                         failedCount++;
+                                                         errorMsg = lwcCSVcustomsetting.No_Rate_Entry_for_this_Accessorial__c + ' "' + recordAccessorialList[i].rtms__Accessorial__r.name + '"' ;
+                                                         errorMsgList.add(errorMsg);
+                                                        
+                                                         for(integer index:csvDatamap.keyset()){
+                                                             
+                                                             if(csvimportMap.get(failedLane)==csvDatamap.get(index)){
+                                                                 if(failedRowsMap!=null){
+                                                                     if(failedRowsMap.get(index)!=null){
+                                                                         failedRowsMap.get(index).add(errorMsg);
+                                                                     }
+                                                                     else{
+                                                                         failedRowsMap.put(index,new List<string>{errorMsg});   
+                                                                     }
+                                                                     
+                                                                 }
+                                                                 else{failedRowsMap.put(1,new List<string>{errorMsg});
+                                                                     }
+                                                                 system.debug('failedRowsMap7--'+JSON.serializePretty(failedRowsMap));
+                                                                 break;
+                                                             }
+                                                             
+                                                             
+                                                             
+                                                         }
+                                                         
+                                                         
+                                                         if(csvRows!=null && !csvRows.toString().contains(csvimportMap.get(failedLane))){
+                                                             csvRows += csvimportMap.get(failedLane);
+                                                             
+                                                         }
+                                                         if(csvRows==null){
+                                                             csvRows = csvimportMap.get(failedLane);
+                                                         }
+                                                         system.debug('csvRows7--'+JSON.serializePretty(csvRows));
+                                                     }else{
+                                                         successCount++;
+                                                     }
+                                                 }
+                                                 
+                                                 update laneRateEntryList;
+                                                 
+                                                 sendEmails(csvFileLines[0], successCount);
+                                                 
+                                                 TriggerHandlerRateEntry.shouldRunTrigger = true;
+                                                 return lwcCSVcustomsetting.RecordsProcessedSuccessfully__c +successCount+ lwcCSVcustomsetting.Records_failed__c +failedCount +lwcCSVcustomsetting.Rate_Entries_String__c+ ' '+newRateEntryMap.size();
+                                                 
+                                                 //return('success');
+                                             }catch(Exception e){
+                                                 TriggerHandlerRateEntry.shouldRunTrigger = true;
+                                                 system.debug('eeer'+e.getMessage()+ 'stack' +e.getStackTraceString()+ 'type name'+e.getTypeName());
+                                                 return lwcCSVcustomsetting.Thefollowingexceptionhasoccured__c +' ' + e.getMessage();
+                                             }
+                                         }
     @AuraEnabled
     public static string saveFile(Id contentDocumentId, string tpId,
                                   string modeId, string rateMethod, string rfpId, string status, 
@@ -732,32 +775,36 @@ public with sharing class lwcCSVUploaderController {
             string[] csvRecordData = replacedString.split(',');
             if(csvDatamap!=null && csvDatamap.values().contains(csvFileLines[i])){
                 //do nothing as we have already this data and same error can occur 
-                system.debug(i+' Contains value==>'+csvFileLines[i]);
+                
                 skipRec=true;
             }
             else{
                 csvDatamap.put(i,csvFileLines[i]);
             }
-            
-            system.debug(i+'valuesforlogging==> '+ JSON.serializePretty(csvDatamap.get(i)));
+            if(csvRecordData[14].trim() ==rateentryRatetypePicval.get(Accessorial) || csvRecordData[14].trim() ==rateentryRatetypePicval.get(Fuel)){
+                handleFailure(lwcCSVcustomsetting.Rate_Type_Fuel_Accessorials_are_no_lon__c, i, csvFileLines);
+                skipRec=true;
+            }
+            //system.debug(i+'valuesforlogging==> '+ JSON.serializePretty(csvDatamap.get(i)));
             if(!skipRec){
                 if(String.isBlank(csvRecordData[14])){
                 handleFailure(lwcCSVcustomsetting.Rate_Type_Cannot_be_Blank__c, i, csvFileLines);
-            }else if(String.isBlank(csvRecordData[28])) {
+            }/*else*/ if(String.isBlank(csvRecordData[28])) {
                 handleFailure(lwcCSVcustomsetting.Mode_Cannot_be_Blank__c, i, csvFileLines);
-            }else if(String.isBlank(csvRecordData[25]) && csvRecordData[14].trim() != rateentryRatetypePicval.get(Fuel) && csvRecordData[14].trim() !=rateentryRatetypePicval.get(Accessorial) && csvRecordData[17].trim() != rateentryPricetypesubmitted.get(Brokerage_Only)) {
+            }/*else*/ if(String.isBlank(csvRecordData[25]) && csvRecordData[14].trim() != rateentryRatetypePicval.get(Fuel) && csvRecordData[14].trim() !=rateentryRatetypePicval.get(Accessorial) && csvRecordData[17].trim() != rateentryPricetypesubmitted.get(Brokerage_Only)) {
                 handleFailure(lwcCSVcustomsetting.Terminal_Cannot_be_Blank__c, i, csvFileLines);
-            }else if(String.isBlank(csvRecordData[19]) && csvRecordData[14].trim() ==rateentryRatetypePicval.get(Accessorial) && csvRecordData[27].trim() == Pricing_Notes ) {
+            }/*else */if(String.isBlank(csvRecordData[19]) && csvRecordData[14].trim() ==rateentryRatetypePicval.get(Accessorial) && csvRecordData[27].trim() == Pricing_Notes ) {
                 handleFailure(lwcCSVcustomsetting.Pricing_Notes_Cannot_be_Blank__c, i, csvFileLines);
-            }else if(csvRecordData[14].trim()!=rateentryRatetypePicval.get(Fuel)  &&(String.isBlank(csvRecordData[27]) || !validRateMethodsList.contains(csvRecordData[27].trim().toLowerCase()))){
+            }/*else */if(csvRecordData[14].trim()!=rateentryRatetypePicval.get(Fuel)  &&(String.isBlank(csvRecordData[27]) || !validRateMethodsList.contains(csvRecordData[27].trim().toLowerCase()))){
                 handleFailure(lwcCSVcustomsetting.Rate_Method_missing_spelled_incorrect__c	, i, csvFileLines);
-            }else if(csvRecordData[14].trim() !=rateentryRatetypePicval.get(Fuel) && (String.isBlank(csvRecordData[21]) || String.isBlank(csvRecordData[22])) && csvRecordData[27].trim() != Pricing_Notes ){
+            }/*else*/ if(csvRecordData[14].trim() !=rateentryRatetypePicval.get(Fuel) && (String.isBlank(csvRecordData[21]) || String.isBlank(csvRecordData[22])) && csvRecordData[27].trim() != Pricing_Notes ){
                 handleFailure(lwcCSVcustomsetting.Charge_Type_Rate_Cannot_be_Blank__c, i, csvFileLines);
-            }else if(csvRecordData[14].trim()!=rateentryRatetypePicval.get(Fuel) && csvRecordData[14].trim()!=rateentryRatetypePicval.get(Freight) && csvRecordData[14].trim()!=rateentryRatetypePicval.get(FreightAccessorial) && csvRecordData[14].trim()!=rateentryRatetypePicval.get(Accessorial) && csvRecordData[14].trim() != FreightFuel && csvRecordData[14].trim() != FreightFuelAccessorial){
+            }/*else*/ if(csvRecordData[14].trim()!=rateentryRatetypePicval.get(Fuel) && csvRecordData[14].trim()!=rateentryRatetypePicval.get(Freight) && csvRecordData[14].trim()!=rateentryRatetypePicval.get(FreightAccessorial) && csvRecordData[14].trim()!=rateentryRatetypePicval.get(Accessorial) && csvRecordData[14].trim() != FreightFuel && csvRecordData[14].trim() != FreightFuelAccessorial){
+                
                 handleFailure(lwcCSVcustomsetting.Rate_Type_is_Wrong__c+' "' + '<span style="color: blue;">' + csvRecordData[14] + '</span>"', i, csvFileLines);
-            }else if((csvRecordData[14].trim() ==rateentryRatetypePicval.get(Fuel) || csvRecordData[14].trim() == FreightFuel || (csvRecordData[14].trim() ==FreightFuelAccessorial && csvRecordData[21].trim()==Freight)) && String.isBlank(csvRecordData[24])){
+            }/*else */if((csvRecordData[14].trim() ==rateentryRatetypePicval.get(Fuel) || csvRecordData[14].trim() == FreightFuel || (csvRecordData[14].trim() ==FreightFuelAccessorial && csvRecordData[21].trim()==Freight)) && String.isBlank(csvRecordData[24])){
                 handleFailure(lwcCSVcustomsetting.Fuel_Surcharge_is_missing__c, i, csvFileLines);
-            }else{
+            }/*else{*/
                 /*skipRec =*/ verifyField(0,csvRecordData,csvFileLines,i, skipRec);
                 //if(!skipRec){
                 /*skipRec =*/ verifyField(7,csvRecordData,csvFileLines,i, skipRec);
@@ -776,7 +823,7 @@ public with sharing class lwcCSVUploaderController {
                             string failedLanename ='';
                             failedLanename = prepareLanenameexcelHelper.LanenameexcelHelper(String.join(csvRecordData, ','));
                             //failedLanename = result.lanenameexcel;
-                            Integer[] indicesToCheck = new Integer[]{17, 24, 25, 26, 28, 29};
+                            Integer[] indicesToCheck = new Integer[]{17, 24, 25, 26, 28, 30};
                                 for (Integer index : indicesToCheck) {
                                     if (csvRecordData[index] != null) {
                                         failedLanename += String.valueOf(csvRecordData[index]).trim()+ ' ';
@@ -832,7 +879,7 @@ public with sharing class lwcCSVUploaderController {
                         failedaccessorialMap.put(failedPriceLanename, csvFileLines[i]);
                     }
                 }
-            }
+            //}
             
             
                 String lanenameaccess = '';
@@ -852,7 +899,7 @@ public with sharing class lwcCSVUploaderController {
                         objrateEntry.rtms__RFP__c = rfpId;
                         objrateEntry.Rate_Method__c = csvRecordData[27].trim();
                         objrateEntry.rtms__Transportation_Profile__c = tpId;
-                        objrateEntry.rtms__Minimum_Weight__c = (String.isBlank(csvRecordData[29])) ? 0 : decimal.valueOf(csvRecordData[29]);
+                        objrateEntry.rtms__Minimum_Weight__c = (String.isBlank(csvRecordData[30])) ? 0 : decimal.valueOf(csvRecordData[30]);
                         objrateEntry.rtms__Status__c = status;
                         objrateEntry.rtms__Quote_Contract_Id__c = quoteId;
                         
@@ -884,20 +931,26 @@ public with sharing class lwcCSVUploaderController {
                         }
                         objrateEntry.rtms__Distance__c = (String.isBlank(csvRecordData[15])) ? 0 : decimal.valueOf(csvRecordData[15]);
                         objrateEntry.Round_Trip_Miles__c = (String.isBlank(csvRecordData[16])) ? 0 : decimal.valueOf(csvRecordData[16]);
-                        objrateEntry.rtms__Minimum_Weight__c = (String.isBlank(csvRecordData[29])) ? 0 : decimal.valueOf(csvRecordData[29]);
+                        objrateEntry.rtms__Minimum_Weight__c = (String.isBlank(csvRecordData[30])) ? 0 : decimal.valueOf(csvRecordData[30]);
                         objrateEntry.rtms__Expected_Load_Volume__c = (String.isBlank(csvRecordData[18])) ? 0 : decimal.valueOf(csvRecordData[18].trim());
                         objrateEntry.Pricing_Notes__c=(csvRecordData[19]);
                         objrateEntry.Internal_Notes__c = (String.isBlank(csvRecordData[20])) ? '' : csvRecordData[20].trim();
                         if(csvRecordData[14].trim() != rateentryRatetypePicval.get(Fuel)){
                             objrateEntry.Freight_Rate__c = (String.isBlank(csvRecordData[22])) ? 0 :decimal.valueOf((csvRecordData[22].replace('$', '')).trim());
                         }
+                        objrateEntry.Target_Rate__c = (String.isBlank(csvRecordData[41])) ? 0 :decimal.valueOf((csvRecordData[41].replace('$', '')).trim());
+                        objrateEntry.Expected_Margin__c = (String.isBlank(csvRecordData[42])) ? 0 : decimal.valueOf(csvRecordData[42].trim());
+                        if (!String.isBlank(csvRecordData[39])) {
+                            
+                            objrateEntry.rtms__Volume_Units__c = csvRecordData[39];
+                        }
                         
-                        if (!String.isBlank(csvRecordData[31])) {
-                            objrateEntry.rtms__Weight_Units__c = csvRecordData[31];
+                        if (!String.isBlank(csvRecordData[40])) {
+                            objrateEntry.rtms__Weight_Units__c = csvRecordData[40];
                         }
                         objrateEntry.rtms__Category__c = 'Customer';
                         String lanename = lanenameexcel;
-                        Integer[] indicesToCheck = new Integer[]{17, 24, 25, 26, 28, 29};
+                        Integer[] indicesToCheck = new Integer[]{17, 24, 25, 26, 28, 30};
                             for (Integer index : indicesToCheck) {
                                 if (csvRecordData[index] != null) {
                                     lanenameexcel += String.valueOf(csvRecordData[index]).trim()+ ' ';
@@ -935,22 +988,26 @@ public with sharing class lwcCSVUploaderController {
                                     newRateEntryMap.put(lanenameexcel,objrateEntry);
                                 }
                             }else{
+                                
+                                    integer prevIndex=csvDatamap1.get(lanenameexcel);
+                                    //string[] csvFileLine=csvimportMap.get(lanenameexcel);
+                                handleFailure(lwcCSVcustomsetting.Duplicate_Rate_Entry__c  + ' "' + lanenameexcel + '"', prevIndex, csvFileLines);
                                 handleFailure(lwcCSVcustomsetting.Duplicate_Rate_Entry__c  + ' "' + lanenameexcel + '"', i, csvFileLines);
                                 failedaccessorialMap.put(lanenameexcel, csvFileLines[i]);
                             }
                         }
                     }
                     //Adding this logic for invalid Accessorial Revist this logic
-                    if(/*!skipRec &&*/ csvRecordData[14].trim() ==rateentryRatetypePicval.get(FreightAccessorial) && validAccessorialNamesMap.get(csvRecordData[21].trim().toLowerCase())==null){
-                    	handleFailure(lwcCSVcustomsetting.NoAccessorialspresent__c  + ' "' + lanenameexcel + '"', i, csvFileLines);
-                	}
+                    //if(/*!skipRec &&*/ csvRecordData[14].trim() ==rateentryRatetypePicval.get(FreightAccessorial) && validAccessorialNamesMap.get(csvRecordData[21].trim().toLowerCase())==null){
+                    	//handleFailure(lwcCSVcustomsetting.NoAccessorialspresent__c  + ' "' + lanenameexcel + '"', i, csvFileLines);
+                	//}
                     
                 }
                 
                 else{
                     lanenameexcel = prepareLanenameexcelHelper.LanenameexcelHelper(String.join(csvRecordData, ','));
                     lanenameaccess = lanenameexcel;
-                    Integer[] indicesToCheck = new Integer[]{17, 24, 25, 26, 28, 29, 21};
+                    Integer[] indicesToCheck = new Integer[]{17, 24, 25, 26, 28, 30, 21};
                         for (Integer index : indicesToCheck) {
                             if (csvRecordData[index] != null) {
                                 lanenameexcel += String.valueOf(csvRecordData[index].trim()) + ' ';
@@ -960,7 +1017,7 @@ public with sharing class lwcCSVUploaderController {
                     rtms__RateEntryAccessorial__c accesorial = new rtms__RateEntryAccessorial__c();
                     rtms__Accessorial__c acc = new rtms__Accessorial__c();
                     try{
-                        system.debug('ExceptionData==>'+csvRecordData[21].trim().toLowerCase());
+                        
                         acc = validAccessorialNamesMap.get(csvRecordData[21].trim().toLowerCase());
                         accesorial.rtms__Accessorial__c = acc.Id;
                     }catch(Exception e){
@@ -1009,30 +1066,29 @@ public with sharing class lwcCSVUploaderController {
         //skipRec = true;
         if(failedRowsMap.containsKey(index) ){
             failedRowsMap.get(index).add(message);
-            system.debug('MD2==>'+JSON.serializePretty(failedRowsMap));   
-            //skipRec = true;                
+            
         }
         else{
             failedRowsMap.put(index, new List<string>{message});
-            system.debug('MD==>'+failedRowsMap);
+            
         }
         errorMsgList.add(message);
         failedRows.add(csvFileLines[index]);
         if(csvRows == null){
             
             csvRows = csvFileLines[index];
-            system.debug('csvRows ==>'+ JSON.serializePretty(csvRows));
+            
             
         }
         else {
             if(!csvRows.tostring().contains(csvFileLines[index])){
-                system.debug('csvRows ==>'+ JSON.serializePretty(csvRows));
-                system.debug('csvRows ==>'+ JSON.serializePretty(csvFileLines[index]));
+                
                 csvRows += csvFileLines[index]; 
-                system.debug('csvRows ==> aftrer adding'+ JSON.serializePretty(csvRows));
+                
             }
             
         }
+        system.debug('csvRows7--'+JSON.serializePretty(csvRows));
         failedCount++;
         
     }
